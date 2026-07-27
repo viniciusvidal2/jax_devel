@@ -17,7 +17,7 @@ from pathlib import Path
 import jax
 import jax.numpy as jnp
 import optax
-from orbax import checkpoint
+from orbax import checkpoint as ocp
 
 from config_loader import get_section, load_workspace_config
 from gpt_style_model import GPTConfig, build_gpt_style_model
@@ -66,9 +66,11 @@ def load_train_config() -> TrainConfig:
     gpt_model = get_section(config, "gpt_model")
     training = get_section(config, "training")
 
-    training_date_range = dataset_loading.get("training_date_range", ["1990-01-01", "2021-12-31"])
+    training_date_range = dataset_loading.get(
+        "training_date_range", ["1990-01-01", "2021-12-31"])
     if not isinstance(training_date_range, list) or len(training_date_range) != 2:
-        raise ValueError("dataset_loading.training_date_range must be a 2-item list.")
+        raise ValueError(
+            "dataset_loading.training_date_range must be a 2-item list.")
 
     return TrainConfig(
         file_path=dataset_loading.get("file_path", "AAPL.csv"),
@@ -93,10 +95,13 @@ def load_train_config() -> TrainConfig:
         adam_eps=training.get("adam_eps", 1e-8),
         grad_clip_norm=training.get("grad_clip_norm", 1.0),
         stability_window=training.get("stability_window", 100),
-        min_steps_before_stability=training.get("min_steps_before_stability", 500),
-        min_relative_improvement=training.get("min_relative_improvement", 1e-3),
+        min_steps_before_stability=training.get(
+            "min_steps_before_stability", 500),
+        min_relative_improvement=training.get(
+            "min_relative_improvement", 1e-3),
         plateau_patience_windows=training.get("plateau_patience_windows", 5),
-        checkpoint_path=training.get("checkpoint_path", "gpt_model_checkpoint.orbax"),
+        checkpoint_path=training.get(
+            "checkpoint_path", "gpt_model_checkpoint.orbax"),
     )
 
 
@@ -170,7 +175,7 @@ def train(config: TrainConfig) -> None:
     optimizer, lr_schedule = make_optimizer(config)
     opt_state = optimizer.init(params)
 
-    @jax.jit
+    @jax.jit(device=jax.devices("cpu")[0])
     def train_step(
         current_params: dict,
         current_opt_state: optax.OptState,
@@ -182,7 +187,8 @@ def train(config: TrainConfig) -> None:
             return jnp.mean((preds - y_batch) ** 2)
 
         loss, grads = jax.value_and_grad(loss_fn)(current_params)
-        updates, next_opt_state = optimizer.update(grads, current_opt_state, current_params)
+        updates, next_opt_state = optimizer.update(
+            grads, current_opt_state, current_params)
         next_params = optax.apply_updates(current_params, updates)
         return next_params, next_opt_state, loss
 
@@ -205,7 +211,8 @@ def train(config: TrainConfig) -> None:
             x_batch = jnp.asarray(batch["x"], dtype=jnp.float32)
             y_batch = jnp.asarray(batch["y"], dtype=jnp.float32)
 
-            params, opt_state, loss = train_step(params, opt_state, x_batch, y_batch)
+            params, opt_state, loss = train_step(
+                params, opt_state, x_batch, y_batch)
 
             step += 1
             loss_value = float(loss)
@@ -237,7 +244,7 @@ def train(config: TrainConfig) -> None:
                     )
                     # Save the model parameters before exiting with Orbax
                     checkpoint_path = Path.cwd() / config.checkpoint_path
-                    checkpointer = checkpoint.PyTreeCheckpointer()
+                    checkpointer = ocp.StandardCheckpointer()
                     checkpointer.save(checkpoint_path, params, force=True)
                     print(f"Model parameters saved to {checkpoint_path}.")
                     return

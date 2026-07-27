@@ -90,7 +90,7 @@ def main() -> None:
     window_size = 10
 
     data = load_data(file_path, date_filter=date_range,
-                        price_column=price_column)
+                     price_column=price_column)
     if data is None:
         raise SystemExit(1)
 

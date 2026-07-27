@@ -95,7 +95,9 @@ class GPTStyleRegressor(nn.Module):
             )(x, mask=mask)
 
         x = nn.LayerNorm()(x)
-        x = x[:, -1, :]
+        attn_scores = nn.Dense(1, name="pooling_score")(x)
+        attn_weights = nn.softmax(attn_scores, axis=1)
+        x = jnp.sum(attn_weights * x, axis=1)  # Basic attention pooling
         x = nn.Dense(self.ff_dim)(x)
         x = nn.gelu(x)
         prediction = nn.Dense(1)(x)
@@ -156,7 +158,7 @@ def main() -> None:
     window_size = 100
 
     data = load_data(file_path, date_filter=date_range,
-                        price_column=price_column)
+                     price_column=price_column)
     if data is None:
         raise SystemExit(1)
 

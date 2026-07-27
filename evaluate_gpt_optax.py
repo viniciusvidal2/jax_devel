@@ -17,7 +17,7 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
-from orbax import checkpoint
+from orbax import checkpoint as ocp
 import pandas as pd
 
 from config_loader import get_section, load_workspace_config
@@ -53,9 +53,11 @@ def load_eval_config() -> EvalConfig:
     gpt_model = get_section(config, "gpt_model")
     evaluation = get_section(config, "evaluation")
 
-    evaluation_date_range = dataset_loading.get("evaluation_date_range", ["2022-01-01", "2022-12-31"])
+    evaluation_date_range = dataset_loading.get(
+        "evaluation_date_range", ["2022-01-01", "2022-12-31"])
     if not isinstance(evaluation_date_range, list) or len(evaluation_date_range) != 2:
-        raise ValueError("dataset_loading.evaluation_date_range must be a 2-item list.")
+        raise ValueError(
+            "dataset_loading.evaluation_date_range must be a 2-item list.")
 
     return EvalConfig(
         file_path=dataset_loading.get("file_path", "AAPL.csv"),
@@ -72,7 +74,8 @@ def load_eval_config() -> EvalConfig:
         rolling_window=evaluation.get("rolling_window", 20),
         save_dir=evaluation.get("save_dir", "plots"),
         show=evaluation.get("show", True),
-        checkpoint_path=evaluation.get("checkpoint_path", "gpt_model_checkpoint.orbax"),
+        checkpoint_path=evaluation.get(
+            "checkpoint_path", "gpt_model_checkpoint.orbax"),
     )
 
 
@@ -88,16 +91,10 @@ def load_restored_params(config: EvalConfig):
         )
     )
 
-    dummy_input = jnp.ones((1, config.window_size), dtype=jnp.float32)
-    variables = model.init(jax.random.PRNGKey(0), dummy_input)
-    params_template = variables["params"]
-
     checkpoint_path = Path.cwd() / config.checkpoint_path
-    if not checkpoint_path.exists():
-        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
-
-    checkpointer = checkpoint.PyTreeCheckpointer()
-    restored_params = checkpointer.restore(checkpoint_path, item=params_template)
+    checkpointer = ocp.StandardCheckpointer()
+    restored_params = checkpointer.restore(checkpoint_path)
+    
     return model, restored_params
 
 
@@ -169,7 +166,8 @@ def compute_metrics(actual: np.ndarray, predicted: np.ndarray) -> dict[str, floa
     max_ae = float(np.max(abs_error))
 
     epsilon = 1e-8
-    mape = float(np.mean(abs_error / np.maximum(np.abs(actual), epsilon)) * 100.0)
+    mape = float(
+        np.mean(abs_error / np.maximum(np.abs(actual), epsilon)) * 100.0)
 
     ss_res = float(np.sum(error ** 2))
     ss_tot = float(np.sum((actual - np.mean(actual)) ** 2))
@@ -205,23 +203,29 @@ def plot_results(
     ).mean()
 
     fig, axes = plt.subplots(2, 2, figsize=(18, 11), constrained_layout=True)
-    fig.suptitle("GPT-style one-step forecast evaluation", fontsize=16, fontweight="bold")
+    fig.suptitle("GPT-style one-step forecast evaluation",
+                 fontsize=16, fontweight="bold")
 
-    axes[0, 0].plot(dates, actual, label="Actual", linewidth=2.0, color="#1f77b4")
-    axes[0, 0].plot(dates, predicted, label="Predicted", linewidth=1.8, color="#d62728", alpha=0.9)
+    axes[0, 0].plot(dates, actual, label="Actual",
+                    linewidth=2.0, color="#1f77b4")
+    axes[0, 0].plot(dates, predicted, label="Predicted",
+                    linewidth=1.8, color="#d62728", alpha=0.9)
     axes[0, 0].set_title("Actual vs predicted price curve")
     axes[0, 0].set_xlabel("Date")
     axes[0, 0].set_ylabel(config.price_column)
     axes[0, 0].legend(loc="best")
 
-    axes[0, 1].plot(dates, abs_error, label="Absolute error", color="#ff7f0e", alpha=0.7)
-    axes[0, 1].plot(dates, rolling_mae, label=f"Rolling MAE ({config.rolling_window})", color="#2ca02c", linewidth=2.0)
+    axes[0, 1].plot(dates, abs_error, label="Absolute error",
+                    color="#ff7f0e", alpha=0.7)
+    axes[0, 1].plot(dates, rolling_mae,
+                    label=f"Rolling MAE ({config.rolling_window})", color="#2ca02c", linewidth=2.0)
     axes[0, 1].set_title("Error over time")
     axes[0, 1].set_xlabel("Date")
     axes[0, 1].set_ylabel("Error")
     axes[0, 1].legend(loc="best")
 
-    axes[1, 0].hist(error, bins=35, color="#9467bd", alpha=0.85, edgecolor="white")
+    axes[1, 0].hist(error, bins=35, color="#9467bd",
+                    alpha=0.85, edgecolor="white")
     axes[1, 0].axvline(0.0, color="black", linestyle="--", linewidth=1.0)
     axes[1, 0].set_title("Residual distribution")
     axes[1, 0].set_xlabel("Prediction - actual")
@@ -244,13 +248,16 @@ def plot_results(
         va="top",
         ha="right",
         fontsize=10,
-        bbox={"boxstyle": "round,pad=0.4", "facecolor": "white", "alpha": 0.85},
+        bbox={"boxstyle": "round,pad=0.4",
+              "facecolor": "white", "alpha": 0.85},
     )
 
     min_val = min(float(np.min(actual)), float(np.min(predicted)))
     max_val = max(float(np.max(actual)), float(np.max(predicted)))
-    axes[1, 1].scatter(actual, predicted, s=14, alpha=0.6, color="#17becf", edgecolors="none")
-    axes[1, 1].plot([min_val, max_val], [min_val, max_val], linestyle="--", color="black", linewidth=1.2)
+    axes[1, 1].scatter(actual, predicted, s=14, alpha=0.6,
+                       color="#17becf", edgecolors="none")
+    axes[1, 1].plot([min_val, max_val], [min_val, max_val],
+                    linestyle="--", color="black", linewidth=1.2)
     axes[1, 1].set_title("Predicted vs actual")
     axes[1, 1].set_xlabel("Actual")
     axes[1, 1].set_ylabel("Predicted")
@@ -262,7 +269,8 @@ def plot_results(
 
     plt.figure(figsize=(18, 5))
     plt.plot(dates, actual, label="Actual", linewidth=2.1, color="#1f77b4")
-    plt.plot(dates, predicted, label="Predicted", linewidth=1.6, color="#d62728", alpha=0.9)
+    plt.plot(dates, predicted, label="Predicted",
+             linewidth=1.6, color="#d62728", alpha=0.9)
     plt.title("One-step-ahead tracking across the full date range")
     plt.xlabel("Date")
     plt.ylabel(config.price_column)

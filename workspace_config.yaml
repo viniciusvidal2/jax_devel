@@ -9,15 +9,15 @@ dataset_loading:
     - "2022-12-31"
 
 gpt_model:
-  window_size: 20
-  embed_dim: 260
-  num_heads: 20
+  window_size: 100
+  embed_dim: 128
+  num_heads: 32
   ff_dim: 512
-  num_blocks: 6
+  num_blocks: 10
   dropout_rate: 0.4
 
 training:
-  batch_size: 64
+  batch_size: 32
   max_steps: 15000
   log_every: 150
   seed: 42

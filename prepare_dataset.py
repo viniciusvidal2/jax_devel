@@ -106,7 +106,8 @@ class Dataset:
         # Normalize the input window to [0, 1]
         x = (x_raw - x_min) / (x_max - x_min + 1e-8)
         # The target value is the next value in the series
-        y = (self.data[idx + self.window_size] - x_min) / (x_max - x_min + 1e-8)
+        y = (self.data[idx + self.window_size] - x_min) / \
+            (x_max - x_min + 1e-8)
         return {"x": x, "y": y, "x_min": x_min, "x_max": x_max}
 
 
@@ -184,7 +185,7 @@ def main() -> None:
         print("Loader batches:")
         for i, batch in enumerate(loader):
             print(f"Batch {i}: {batch}")
-            if i >= 9:  # Print only the first 10 batches
+            if i > 2:
                 break
 
 
