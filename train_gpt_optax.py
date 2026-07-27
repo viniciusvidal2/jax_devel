@@ -19,7 +19,7 @@ import jax.numpy as jnp
 import optax
 from orbax import checkpoint as ocp
 
-from config_loader import get_section, load_workspace_config
+from configs.config_loader import get_section, load_workspace_config
 from gpt_style_model import GPTConfig, build_gpt_style_model
 from prepare_dataset import Dataset, create_dataloader, load_data
 
