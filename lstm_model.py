@@ -26,6 +26,15 @@ class LSTMRegressor(nn.Module):
 
     @nn.compact
     def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
+        """
+        Apply the LSTM regressor to input sequences.
+
+        Parameters:
+            x (jnp.ndarray): Input sequence tensor, shaped [batch, window_size] or [window_size].
+
+        Returns:
+            jnp.ndarray: Predicted scalar values for each window, shaped [batch] or scalar.
+        """
         if x.ndim == 1:
             x = x[None, :]
         if x.ndim != 2:
@@ -67,6 +76,15 @@ class LSTMConfig:
 
 
 def build_lstm_model(config: LSTMConfig) -> LSTMRegressor:
+    """
+    Build an LSTM regressor model from configuration.
+
+    Parameters:
+        config (LSTMConfig): Configuration parameters for the model.
+
+    Returns:
+        LSTMRegressor: Instantiated regressor model.
+    """
     return LSTMRegressor(
         hidden_size=config.hidden_size,
         num_layers=config.num_layers,
@@ -74,7 +92,22 @@ def build_lstm_model(config: LSTMConfig) -> LSTMRegressor:
     )
 
 
-def initialize_model(window_size: int = 10, hidden_size: int = 64, num_layers: int = 2):
+def initialize_model(
+    window_size: int = 10,
+    hidden_size: int = 64,
+    num_layers: int = 2,
+) -> tuple[LSTMRegressor, dict, jnp.ndarray]:
+    """
+    Initialize model parameters and return instance, parameters, and a dummy prediction.
+
+    Parameters:
+        window_size (int): Size of input sliding window.
+        hidden_size (int): Size of LSTM hidden state.
+        num_layers (int): Number of stacked LSTM layers.
+
+    Returns:
+        tuple[LSTMRegressor, dict, jnp.ndarray]: Model, initialized parameters, and output on dummy input.
+    """
     model = build_lstm_model(LSTMConfig(
         window_size=window_size, hidden_size=hidden_size, num_layers=num_layers))
     dummy_input = jnp.ones((1, window_size), dtype=jnp.float32)
@@ -84,11 +117,14 @@ def initialize_model(window_size: int = 10, hidden_size: int = 64, num_layers: i
 
 
 def main() -> None:
+    """
+    Execute sample data loading and prediction using the LSTM model.
+    """
     file_path = "datasets/AAPL.csv"
     date_range = ("2017-01-01", "2022-12-31")
     price_column = "Adj Close"
     window_size = 10
-
+ 
     data = load_data(file_path, date_filter=date_range,
                      price_column=price_column)
     if data is None:

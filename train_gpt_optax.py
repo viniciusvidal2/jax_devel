@@ -61,6 +61,12 @@ class TrainConfig:
 
 
 def load_train_config() -> TrainConfig:
+    """
+    Load the training configuration from workspace YAML file.
+
+    Returns:
+        TrainConfig: Loaded configuration dataclass instance.
+    """
     config = load_workspace_config()
     dataset_loading = get_section(config, "dataset_loading")
     gpt_model = get_section(config, "gpt_model")
@@ -106,6 +112,15 @@ def load_train_config() -> TrainConfig:
 
 
 def make_optimizer(config: TrainConfig) -> tuple[optax.GradientTransformation, optax.Schedule]:
+    """
+    Build the Optax gradient transformation and learning rate decay schedule.
+
+    Parameters:
+        config (TrainConfig): Training configuration parameters.
+
+    Returns:
+        tuple[optax.GradientTransformation, optax.Schedule]: The Adam optimizer chain and decay schedule.
+    """
     lr_schedule = optax.cosine_decay_schedule(
         init_value=config.learning_rate,
         decay_steps=max(1, config.decay_steps),
@@ -130,6 +145,18 @@ def should_stop_for_stability(
     no_improve_windows: int,
     config: TrainConfig,
 ) -> tuple[bool, float, int, float]:
+    """
+    Determine if training should stop early due to loss plateau/stability.
+
+    Parameters:
+        loss_history (deque[float]): Deque storing the loss history of recent steps.
+        best_window_loss (float): Best average window loss achieved so far.
+        no_improve_windows (int): Count of consecutive windows without improvement.
+        config (TrainConfig): Training configuration parameters.
+
+    Returns:
+        tuple[bool, float, int, float]: Stop flag, updated best loss, updated window count, current window loss.
+    """
     current_window_loss = float(sum(loss_history) / len(loss_history))
     relative_improvement = (best_window_loss - current_window_loss) / max(
         abs(best_window_loss), 1e-8
@@ -148,6 +175,12 @@ def should_stop_for_stability(
 
 
 def train(config: TrainConfig) -> None:
+    """
+    Run the training loop for the GPT-style model.
+
+    Parameters:
+        config (TrainConfig): Training configuration parameters.
+    """
     values = load_data(
         file_path=config.file_path,
         date_filter=(config.date_start, config.date_end),
@@ -182,7 +215,28 @@ def train(config: TrainConfig) -> None:
         x_batch: jnp.ndarray,
         y_batch: jnp.ndarray,
     ) -> tuple[dict, optax.OptState, jnp.ndarray]:
+        """
+        Perform a single JIT-compiled optimization step on cpu.
+
+        Parameters:
+            current_params (dict): Current model parameters.
+            current_opt_state (optax.OptState): Current optimizer state.
+            x_batch (jnp.ndarray): Input batch tensor.
+            y_batch (jnp.ndarray): Target batch tensor.
+
+        Returns:
+            tuple[dict, optax.OptState, jnp.ndarray]: Updated parameters, updated opt state, step loss.
+        """
         def loss_fn(p: dict) -> jnp.ndarray:
+            """
+            Compute the Mean Squared Error loss.
+
+            Parameters:
+                p (dict): Model parameters to evaluate.
+
+            Returns:
+                jnp.ndarray: Mean squared error loss scalar.
+            """
             preds = model.apply({"params": p}, x_batch)
             return jnp.mean((preds - y_batch) ** 2)
 
@@ -256,6 +310,9 @@ def train(config: TrainConfig) -> None:
 
 
 def main() -> None:
+    """
+    Main entry point to load config and trigger training.
+    """
     config = load_train_config()
     train(config)
 

@@ -4,7 +4,15 @@ from pathlib import Path
 
 
 def load_workspace_config(config_path: str | None = None) -> dict:
-    """Load the shared workspace YAML configuration."""
+    """
+    Load the shared workspace YAML configuration.
+
+    Parameters:
+        config_path (str | None): Optional path to the configuration file.
+
+    Returns:
+        dict: The loaded workspace configuration dictionary.
+    """
     try:
         import yaml
     except ImportError as exc:
@@ -29,6 +37,16 @@ def load_workspace_config(config_path: str | None = None) -> dict:
 
 
 def get_section(config: dict, section: str) -> dict:
+    """
+    Retrieve a specific section from the workspace configuration dictionary.
+
+    Parameters:
+        config (dict): The configuration dictionary.
+        section (str): The section key to retrieve.
+
+    Returns:
+        dict: The sub-dictionary corresponding to the specified section.
+    """
     value = config.get(section)
     if not isinstance(value, dict):
         raise ValueError(

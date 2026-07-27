@@ -17,6 +17,15 @@ from prepare_dataset import Dataset, load_data
 
 
 def causal_mask(seq_len: int) -> jnp.ndarray:
+    """
+    Generate a causal mask for self-attention.
+
+    Parameters:
+        seq_len (int): The sequence length.
+
+    Returns:
+        jnp.ndarray: A 4D boolean mask array shaped [1, 1, seq_len, seq_len].
+    """
     mask = jnp.tril(jnp.ones((seq_len, seq_len), dtype=bool))
     return mask[None, None, :, :]
 
@@ -30,6 +39,16 @@ class TransformerBlock(nn.Module):
 
     @nn.compact
     def __call__(self, x: jnp.ndarray, mask: jnp.ndarray) -> jnp.ndarray:
+        """
+        Apply a transformer block with multi-head attention and feed-forward network.
+
+        Parameters:
+            x (jnp.ndarray): Input sequence tensor.
+            mask (jnp.ndarray): Attention mask tensor.
+
+        Returns:
+            jnp.ndarray: The transformed sequence tensor.
+        """
         residual = x
         x = nn.LayerNorm()(x)
         x = nn.MultiHeadDotProductAttention(
@@ -64,6 +83,15 @@ class GPTStyleRegressor(nn.Module):
 
     @nn.compact
     def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
+        """
+        Apply the GPT-style regressor model on input sequences.
+
+        Parameters:
+            x (jnp.ndarray): Input sequence tensor, shaped [batch, window_size] or [window_size].
+
+        Returns:
+            jnp.ndarray: Predicted scalar values for each window, shaped [batch] or scalar.
+        """
         if x.ndim == 1:
             x = x[None, :]
         if x.ndim != 2:
@@ -115,6 +143,15 @@ class GPTConfig:
 
 
 def build_gpt_style_model(config: GPTConfig) -> GPTStyleRegressor:
+    """
+    Build a GPT-style regressor model from configuration.
+
+    Parameters:
+        config (GPTConfig): Configuration parameters for the model.
+
+    Returns:
+        GPTStyleRegressor: Instantiated regressor model.
+    """
     return GPTStyleRegressor(
         window_size=config.window_size,
         embed_dim=config.embed_dim,
@@ -125,7 +162,26 @@ def build_gpt_style_model(config: GPTConfig) -> GPTStyleRegressor:
     )
 
 
-def initialize_model(window_size: int = 10, embed_dim: int = 128, num_heads: int = 4, ff_dim: int = 256, num_blocks: int = 4):
+def initialize_model(
+    window_size: int = 10,
+    embed_dim: int = 128,
+    num_heads: int = 4,
+    ff_dim: int = 256,
+    num_blocks: int = 4,
+) -> tuple[GPTStyleRegressor, dict, jnp.ndarray]:
+    """
+    Initialize model parameters and return instance, parameters, and a dummy prediction.
+
+    Parameters:
+        window_size (int): Size of input sliding window.
+        embed_dim (int): Embedding dimension.
+        num_heads (int): Number of attention heads.
+        ff_dim (int): Feed-forward dimension.
+        num_blocks (int): Number of transformer blocks.
+
+    Returns:
+        tuple[GPTStyleRegressor, dict, jnp.ndarray]: Model, initialized parameters, and output on dummy input.
+    """
     model = build_gpt_style_model(
         GPTConfig(
             window_size=window_size,
@@ -152,6 +208,9 @@ def initialize_model(window_size: int = 10, embed_dim: int = 128, num_heads: int
 
 
 def main() -> None:
+    """
+    Execute sample data loading and prediction using the GPT-style model.
+    """
     file_path = "datasets/AAPL.csv"
     date_range = ("2017-01-01", "2022-12-31")
     price_column = "Adj Close"

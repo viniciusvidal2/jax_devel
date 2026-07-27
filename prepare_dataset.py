@@ -14,12 +14,12 @@ def load_dataset_with_dates(
     Load filtered dates and prices from a CSV file.
 
     Parameters:
-    file_path (str): The path to the CSV file.
-    date_filter (tuple): A tuple containing the start and end dates for filtering the DataFrame.
-    price_column (str): The name of the column to extract from the DataFrame.
+        file_path (str): The path to the CSV file.
+        date_filter (tuple): A tuple containing the start and end dates for filtering the DataFrame.
+        price_column (str): The name of the column to extract from the DataFrame.
 
     Returns:
-    tuple[list, list]: The filtered dates and the selected price column values.
+        tuple[list, list] | None: The filtered dates and the selected price column values, or None if load fails.
     """
     try:
         df = pd.read_csv(file_path, parse_dates=['Date'])
@@ -48,8 +48,22 @@ def load_dataset_with_dates(
     return df['Date'].tolist(), df[price_column].tolist()
 
 
-def load_data(file_path: str, date_filter: tuple = ('2017-01-01', '2022-12-31'), price_column: str = 'Adj Close') -> list:
-    """Load only the filtered price series from a CSV file."""
+def load_data(
+    file_path: str,
+    date_filter: tuple = ('2017-01-01', '2022-12-31'),
+    price_column: str = 'Adj Close',
+) -> list | None:
+    """
+    Load only the filtered price series from a CSV file.
+
+    Parameters:
+        file_path (str): The path to the CSV file.
+        date_filter (tuple): A tuple containing the start and end dates for filtering.
+        price_column (str): The name of the column to extract from the DataFrame.
+
+    Returns:
+        list | None: The selected price column values, or None if load fails.
+    """
     loaded = load_dataset_with_dates(
         file_path, date_filter=date_filter, price_column=price_column)
     if loaded is None:
@@ -71,7 +85,10 @@ class Dataset:
     data: list
     window_size: int = 10
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
+        """
+        Initialize the dataset, converting the data to a JAX array and verifying dimensions.
+        """
         # Convert the list to a JAX array for further processing
         self.data = jnp.asarray(self.data, dtype=jnp.float32)
         self.window_size = int(self.window_size)
@@ -84,6 +101,9 @@ class Dataset:
     def __len__(self) -> int:
         """
         Get the number of samples in the dataset.
+
+        Returns:
+            int: The number of samples available in the dataset.
         """
         return len(self.data) - self.window_size
 
@@ -92,10 +112,10 @@ class Dataset:
         Get a sample from the dataset.
 
         Parameters:
-        idx (int): The index of the sample to retrieve.
+            idx (int): The index of the sample to retrieve.
 
         Returns:
-        dict: A dictionary containing the input window 'x' and the target value 'y'.
+            dict: A dictionary containing the input window 'x' and the target value 'y'.
         """
         if idx < 0 or idx >= len(self):
             raise IndexError("Index out of range.")
@@ -123,15 +143,15 @@ def create_dataloader(
     Create a DataLoader for the given dataset.
 
     Parameters:
-    dataset (Dataset): The dataset to create the DataLoader for.
-    batch_size (int): The number of samples per batch.
-    shuffle (bool): Whether to shuffle the data before creating batches.
-    seed (int): The random seed for shuffling.
-    num_epochs (int): Number of epochs the sampler should iterate through.
-    drop_last (bool): Whether to drop the final incomplete batch.
+        dataset (Dataset): The dataset to create the DataLoader for.
+        batch_size (int): The number of samples per batch.
+        shuffle (bool): Whether to shuffle the data before creating batches.
+        seed (int): The random seed for shuffling.
+        num_epochs (int): Number of epochs the sampler should iterate through.
+        drop_last (bool): Whether to drop the final incomplete batch.
 
     Returns:
-    iterator: An iterator yielding dictionaries with batched 'x' and 'y' arrays.
+        iterator: An iterator yielding dictionaries with batched 'x' and 'y' arrays.
     """
     num_records = len(dataset)
     if num_records == 0:

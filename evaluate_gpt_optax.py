@@ -48,6 +48,12 @@ class EvalConfig:
 
 
 def load_eval_config() -> EvalConfig:
+    """
+    Load the evaluation configuration from workspace YAML file.
+
+    Returns:
+        EvalConfig: Loaded configuration dataclass instance.
+    """
     config = load_workspace_config()
     dataset_loading = get_section(config, "dataset_loading")
     gpt_model = get_section(config, "gpt_model")
@@ -79,7 +85,16 @@ def load_eval_config() -> EvalConfig:
     )
 
 
-def load_restored_params(config: EvalConfig):
+def load_restored_params(config: EvalConfig) -> tuple[GPTStyleRegressor, dict]:
+    """
+    Build the GPT model and restore its parameters from the saved checkpoint.
+
+    Parameters:
+        config (EvalConfig): Evaluation configuration parameters.
+
+    Returns:
+        tuple[GPTStyleRegressor, dict]: Model instance and its restored parameters dictionary.
+    """
     model = build_gpt_style_model(
         GPTConfig(
             window_size=config.window_size,
@@ -99,12 +114,31 @@ def load_restored_params(config: EvalConfig):
 
 
 def recover_real_scale(values: jnp.ndarray, x_min: jnp.ndarray, x_max: jnp.ndarray) -> jnp.ndarray:
-    """Invert the per-window normalization used by Dataset.__getitem__."""
+    """
+    Invert the per-window normalization used by Dataset.__getitem__.
+
+    Parameters:
+        values (jnp.ndarray): Normalized prediction or actual values.
+        x_min (jnp.ndarray): The minimum value of the corresponding window.
+        x_max (jnp.ndarray): The maximum value of the corresponding window.
+
+    Returns:
+        jnp.ndarray: Values scaled back to the original range.
+    """
     scale = x_max - x_min + 1e-8
     return values * scale + x_min
 
 
-def run_ordered_predictions(config: EvalConfig):
+def run_ordered_predictions(config: EvalConfig) -> tuple[pd.DatetimeIndex, np.ndarray, np.ndarray]:
+    """
+    Execute predictions on the dataset sequentially and map them back to dates.
+
+    Parameters:
+        config (EvalConfig): Evaluation configuration parameters.
+
+    Returns:
+        tuple[pd.DatetimeIndex, np.ndarray, np.ndarray]: target_dates, actual_values, predicted_values.
+    """
     loaded = load_dataset_with_dates(
         file_path=config.file_path,
         date_filter=(config.date_start, config.date_end),
@@ -157,6 +191,16 @@ def run_ordered_predictions(config: EvalConfig):
 
 
 def compute_metrics(actual: np.ndarray, predicted: np.ndarray) -> dict[str, float]:
+    """
+    Calculate evaluation metrics comparing actual and predicted values.
+
+    Parameters:
+        actual (np.ndarray): Real target values.
+        predicted (np.ndarray): Predicted values.
+
+    Returns:
+        dict[str, float]: Dictionary of metric names mapping to their calculated values.
+    """
     error = predicted - actual
     abs_error = np.abs(error)
     mse = float(np.mean(error ** 2))
@@ -191,6 +235,16 @@ def plot_results(
     metrics: dict[str, float],
     config: EvalConfig,
 ) -> None:
+    """
+    Plot actual vs predicted price curves, errors over time, and residual distributions.
+
+    Parameters:
+        dates (pd.DatetimeIndex): Target dates for plotting.
+        actual (np.ndarray): Actual stock prices.
+        predicted (np.ndarray): Predicted stock prices.
+        metrics (dict[str, float]): Computed metrics to display in the plot.
+        config (EvalConfig): Evaluation configuration parameters.
+    """
     plt.style.use("seaborn-v0_8-whitegrid")
     save_dir = Path(config.save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -287,6 +341,9 @@ def plot_results(
 
 
 def main() -> None:
+    """
+    Main entry point to run ordered predictions, compute metrics, and plot results.
+    """
     config = load_eval_config()
     dates, actual, predicted = run_ordered_predictions(config)
     metrics = compute_metrics(actual, predicted)
