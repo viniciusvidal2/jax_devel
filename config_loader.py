@@ -12,7 +12,7 @@ def load_workspace_config(config_path: str | None = None) -> dict:
             "PyYAML is required to load workspace_config.yaml. Install with: pip install pyyaml"
         ) from exc
 
-    default_path = Path(__file__).with_name("workspace_config.yaml")
+    default_path = Path(__file__).with_name("configs/workspace_config.yaml")
     path = Path(config_path) if config_path else default_path
 
     if not path.exists():
