@@ -30,7 +30,8 @@ class EvalConfig:
     file_path: str = "datasets/AAPL.csv"
     date_start: str = "2022-01-01"
     date_end: str = "2022-12-31"
-    price_column: str = "Adj Close"
+    input_columns: tuple[str, ...] = ("Adj Close", "Volume")
+    target_columns: tuple[str, ...] = ("Adj Close",)
 
     window_size: int = 100
     batch_size: int = 64
@@ -47,14 +48,17 @@ class EvalConfig:
     show: bool = True
 
 
-def load_eval_config() -> EvalConfig:
+
+def load_eval_config(config_path: str | None = None) -> EvalConfig:
     """
     Load the evaluation configuration from workspace YAML file.
 
     Returns:
         EvalConfig: Loaded configuration dataclass instance.
     """
-    config = load_workspace_config()
+    if config_path is None:
+        config_path = "configs/workspace_config.yaml"
+    config = load_workspace_config(config_path)
     dataset_loading = get_section(config, "dataset_loading")
     gpt_model = get_section(config, "gpt_model")
     evaluation = get_section(config, "evaluation")
@@ -65,11 +69,22 @@ def load_eval_config() -> EvalConfig:
         raise ValueError(
             "dataset_loading.evaluation_date_range must be a 2-item list.")
 
+    input_columns = dataset_loading.get(
+        "input_columns", ["Adj Close", "Volume"])
+    target_columns = dataset_loading.get(
+        "target_columns", ["Adj Close"])
+
+    if isinstance(input_columns, list):
+        input_columns = tuple(input_columns)
+    if isinstance(target_columns, list):
+        target_columns = tuple(target_columns)
+
     return EvalConfig(
         file_path=dataset_loading.get("file_path", "datasets/AAPL.csv"),
         date_start=evaluation_date_range[0],
         date_end=evaluation_date_range[1],
-        price_column=dataset_loading.get("price_column", "Adj Close"),
+        input_columns=input_columns,
+        target_columns=target_columns,
         window_size=gpt_model.get("window_size", 20),
         batch_size=evaluation.get("batch_size", 64),
         embed_dim=gpt_model.get("embed_dim", 260),
@@ -113,20 +128,20 @@ def load_restored_params(config: EvalConfig) -> tuple[GPTStyleRegressor, dict]:
     return model, restored_params
 
 
-def recover_real_scale(values: jnp.ndarray, x_min: jnp.ndarray, x_max: jnp.ndarray) -> jnp.ndarray:
+def recover_real_scale(values: jnp.ndarray, target_min: jnp.ndarray, target_max: jnp.ndarray) -> jnp.ndarray:
     """
     Invert the per-window normalization used by Dataset.__getitem__.
 
     Parameters:
         values (jnp.ndarray): Normalized prediction or actual values.
-        x_min (jnp.ndarray): The minimum value of the corresponding window.
-        x_max (jnp.ndarray): The maximum value of the corresponding window.
+        target_min (jnp.ndarray): The minimum target value of the corresponding window.
+        target_max (jnp.ndarray): The maximum target value of the corresponding window.
 
     Returns:
         jnp.ndarray: Values scaled back to the original range.
     """
-    scale = x_max - x_min + 1e-8
-    return values * scale + x_min
+    scale = target_max - target_min + 1e-8
+    return values * scale + target_min
 
 
 def run_ordered_predictions(config: EvalConfig) -> tuple[pd.DatetimeIndex, np.ndarray, np.ndarray]:
@@ -142,13 +157,14 @@ def run_ordered_predictions(config: EvalConfig) -> tuple[pd.DatetimeIndex, np.nd
     loaded = load_dataset_with_dates(
         file_path=config.file_path,
         date_filter=(config.date_start, config.date_end),
-        price_column=config.price_column,
+        input_columns=config.input_columns,
+        target_columns=config.target_columns,
     )
     if loaded is None:
         raise SystemExit(1)
 
-    dates, values = loaded
-    dataset = Dataset(data=values, window_size=config.window_size)
+    dates, inputs, targets = loaded
+    dataset = Dataset(input_data=inputs, target_data=targets, window_size=config.window_size)
     target_dates = pd.to_datetime(dates[config.window_size:])
 
     model, params = load_restored_params(config)
@@ -168,12 +184,12 @@ def run_ordered_predictions(config: EvalConfig) -> tuple[pd.DatetimeIndex, np.nd
     for batch in loader:
         x_batch = jnp.asarray(batch["x"], dtype=jnp.float32)
         y_batch = jnp.asarray(batch["y"], dtype=jnp.float32)
-        x_min = jnp.asarray(batch["x_min"], dtype=jnp.float32)
-        x_max = jnp.asarray(batch["x_max"], dtype=jnp.float32)
+        y_min = jnp.asarray(batch["y_min"], dtype=jnp.float32)
+        y_max = jnp.asarray(batch["y_max"], dtype=jnp.float32)
         batch_predictions = model.apply({"params": params}, x_batch)
 
-        predicted_real = recover_real_scale(batch_predictions, x_min, x_max)
-        actual_real = recover_real_scale(y_batch, x_min, x_max)
+        predicted_real = recover_real_scale(batch_predictions, y_min, y_max)
+        actual_real = recover_real_scale(y_batch, y_min, y_max)
 
         predictions.append(np.asarray(jax.device_get(predicted_real)))
         actuals.append(np.asarray(jax.device_get(actual_real)))
@@ -260,13 +276,14 @@ def plot_results(
     fig.suptitle("GPT-style one-step forecast evaluation",
                  fontsize=16, fontweight="bold")
 
+    target_label = ", ".join(config.target_columns)
     axes[0, 0].plot(dates, actual, label="Actual",
                     linewidth=2.0, color="#1f77b4")
     axes[0, 0].plot(dates, predicted, label="Predicted",
                     linewidth=1.8, color="#d62728", alpha=0.9)
     axes[0, 0].set_title("Actual vs predicted price curve")
     axes[0, 0].set_xlabel("Date")
-    axes[0, 0].set_ylabel(config.price_column)
+    axes[0, 0].set_ylabel(target_label)
     axes[0, 0].legend(loc="best")
 
     axes[0, 1].plot(dates, abs_error, label="Absolute error",
@@ -327,7 +344,7 @@ def plot_results(
              linewidth=1.6, color="#d62728", alpha=0.9)
     plt.title("One-step-ahead tracking across the full date range")
     plt.xlabel("Date")
-    plt.ylabel(config.price_column)
+    plt.ylabel(target_label)
     plt.legend(loc="best")
     plt.tight_layout()
     series_path = save_dir / "gpt_checkpoint_series.png"
@@ -344,7 +361,7 @@ def main() -> None:
     """
     Main entry point to run ordered predictions, compute metrics, and plot results.
     """
-    config = load_eval_config()
+    config = load_eval_config(config_path="configs/workspace_config_20blocks.yaml")
     dates, actual, predicted = run_ordered_predictions(config)
     metrics = compute_metrics(actual, predicted)
 

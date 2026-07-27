@@ -3,7 +3,7 @@
 
 This script uses:
 - dataset utilities from prepare_dataset.py
-- model definitions from gpt_style_model.py
+- model definitions from model_definitions/gpt_style_model.py
 
 It supports stability-based early stopping on a moving loss average.
 """
@@ -29,7 +29,8 @@ class TrainConfig:
     file_path: str = "datasets/AAPL.csv"
     date_start: str = "1990-01-01"
     date_end: str = "2021-12-31"
-    price_column: str = "Adj Close"
+    input_columns: tuple[str, ...] = ("Adj Close", "Volume")
+    target_columns: tuple[str, ...] = ("Adj Close",)
 
     window_size: int = 20
     batch_size: int = 64
@@ -60,14 +61,19 @@ class TrainConfig:
     checkpoint_path: str = "gpt_model_checkpoint.orbax"
 
 
-def load_train_config() -> TrainConfig:
+def load_train_config(config_path: str | None = None) -> TrainConfig:
     """
     Load the training configuration from workspace YAML file.
+
+    Parameters:
+        config_path (str | None): Path to the YAML configuration file. If None, defaults to "configs/workspace_config.yaml".
 
     Returns:
         TrainConfig: Loaded configuration dataclass instance.
     """
-    config = load_workspace_config()
+    if config_path is None:
+        config_path = "configs/workspace_config.yaml"
+    config = load_workspace_config(config_path)
     dataset_loading = get_section(config, "dataset_loading")
     gpt_model = get_section(config, "gpt_model")
     training = get_section(config, "training")
@@ -78,11 +84,22 @@ def load_train_config() -> TrainConfig:
         raise ValueError(
             "dataset_loading.training_date_range must be a 2-item list.")
 
+    input_columns = dataset_loading.get(
+        "input_columns", ["Adj Close", "Volume"])
+    target_columns = dataset_loading.get(
+        "target_columns", ["Adj Close"])
+
+    if isinstance(input_columns, list):
+        input_columns = tuple(input_columns)
+    if isinstance(target_columns, list):
+        target_columns = tuple(target_columns)
+
     return TrainConfig(
-        file_path=dataset_loading.get("file_path", "AAPL.csv"),
+        file_path=dataset_loading.get("file_path", "datasets/AAPL.csv"),
         date_start=training_date_range[0],
         date_end=training_date_range[1],
-        price_column=dataset_loading.get("price_column", "Adj Close"),
+        input_columns=input_columns,
+        target_columns=target_columns,
         window_size=gpt_model.get("window_size", 20),
         batch_size=training.get("batch_size", 64),
         embed_dim=gpt_model.get("embed_dim", 260),
@@ -181,15 +198,20 @@ def train(config: TrainConfig) -> None:
     Parameters:
         config (TrainConfig): Training configuration parameters.
     """
-    values = load_data(
+    loaded = load_data(
         file_path=config.file_path,
         date_filter=(config.date_start, config.date_end),
-        price_column=config.price_column,
+        input_columns=config.input_columns,
+        target_columns=config.target_columns,
     )
-    if values is None:
+    if loaded is None:
         raise SystemExit(1)
 
-    dataset = Dataset(data=values, window_size=config.window_size)
+    inputs, targets = loaded
+    dataset = Dataset(input_data=inputs, target_data=targets,
+                      window_size=config.window_size)
+    num_features = inputs.shape[1]
+
     model = build_gpt_style_model(
         GPTConfig(
             window_size=config.window_size,
@@ -201,7 +223,7 @@ def train(config: TrainConfig) -> None:
         )
     )
 
-    init_x = jnp.ones((1, config.window_size), dtype=jnp.float32)
+    init_x = jnp.ones((1, config.window_size, num_features), dtype=jnp.float32)
     variables = model.init(jax.random.PRNGKey(config.seed), init_x)
     params = variables["params"]
 
@@ -298,8 +320,8 @@ def train(config: TrainConfig) -> None:
                     )
                     # Save the model parameters before exiting with Orbax
                     checkpoint_path = Path.cwd() / config.checkpoint_path
-                    checkpointer = ocp.StandardCheckpointer()
-                    checkpointer.save(checkpoint_path, params, force=True)
+                    with ocp.StandardCheckpointer() as checkpointer:
+                        checkpointer.save(checkpoint_path, params, force=True)
                     print(f"Model parameters saved to {checkpoint_path}.")
                     return
 
@@ -313,7 +335,7 @@ def main() -> None:
     """
     Main entry point to load config and trigger training.
     """
-    config = load_train_config()
+    config = load_train_config(config_path="workspace_config_20blocks.yaml")
     train(config)
 
 

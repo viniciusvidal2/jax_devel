@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Flax GPT-style transformer regressor for windowed price sequences.
 
-The model accepts inputs shaped as [batch, window_size] and predicts a single
+The model accepts inputs shaped as [batch, window_size, num_features] and predicts a single
 next value for each window.
 """
 
@@ -11,7 +11,11 @@ from dataclasses import dataclass
 
 import jax
 import jax.numpy as jnp
+import sys
+from pathlib import Path
 from flax import linen as nn
+
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from prepare_dataset import Dataset, load_data
 
@@ -87,16 +91,25 @@ class GPTStyleRegressor(nn.Module):
         Apply the GPT-style regressor model on input sequences.
 
         Parameters:
-            x (jnp.ndarray): Input sequence tensor, shaped [batch, window_size] or [window_size].
+            x (jnp.ndarray): Input sequence tensor, shaped [batch, window_size, num_features],
+                             [batch, window_size], or [window_size, num_features].
 
         Returns:
             jnp.ndarray: Predicted scalar values for each window, shaped [batch] or scalar.
         """
-        if x.ndim == 1:
-            x = x[None, :]
-        if x.ndim != 2:
+        if x.ndim == 2:
+            if x.shape[0] == self.window_size:
+                x = x[None, :, :]
+            else:
+                x = x[:, :, None]
+        elif x.ndim == 1:
+            x = x[None, :, None]
+
+        if x.ndim != 3:
             raise ValueError(
-                "Expected inputs shaped as [batch, window_size] or [window_size].")
+                "Expected inputs shaped as [batch, window_size, num_features], "
+                "[batch, window_size], or [window_size, num_features]."
+            )
 
         if x.shape[1] != self.window_size:
             raise ValueError(
@@ -107,7 +120,6 @@ class GPTStyleRegressor(nn.Module):
         position_embedding = nn.Embed(
             num_embeddings=self.window_size, features=self.embed_dim, name="position_embedding")
 
-        x = x[..., None]
         x = token_projection(x) + position_embedding(positions)
         x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=not self.train)
 
@@ -164,6 +176,7 @@ def build_gpt_style_model(config: GPTConfig) -> GPTStyleRegressor:
 
 def initialize_model(
     window_size: int = 10,
+    num_features: int = 2,
     embed_dim: int = 128,
     num_heads: int = 4,
     ff_dim: int = 256,
@@ -174,6 +187,7 @@ def initialize_model(
 
     Parameters:
         window_size (int): Size of input sliding window.
+        num_features (int): Number of input features per timestep.
         embed_dim (int): Embedding dimension.
         num_heads (int): Number of attention heads.
         ff_dim (int): Feed-forward dimension.
@@ -194,6 +208,7 @@ def initialize_model(
     # Print model characteristics
     print(f"Model characteristics:")
     print(f"  Window size: {window_size}")
+    print(f"  Num features: {num_features}")
     print(f"  Embedding dimension: {embed_dim}")
     print(f"  Number of attention heads: {num_heads}")
     print(f"  Feed-forward dimension: {ff_dim}")
@@ -201,7 +216,7 @@ def initialize_model(
     print("-"*100)
     print(model)
     print("-"*100)
-    dummy_input = jnp.ones((1, window_size), dtype=jnp.float32)
+    dummy_input = jnp.ones((1, window_size, num_features), dtype=jnp.float32)
     params = model.init(jax.random.PRNGKey(0), dummy_input)
     output = model.apply(params, dummy_input)
     return model, params, output
@@ -213,21 +228,23 @@ def main() -> None:
     """
     file_path = "datasets/AAPL.csv"
     date_range = ("2017-01-01", "2022-12-31")
-    price_column = "Adj Close"
+    input_columns = ("Adj Close", "Volume")
+    target_columns = ("Adj Close",)
     window_size = 100
 
-    data = load_data(file_path, date_filter=date_range,
-                     price_column=price_column)
-    if data is None:
+    loaded = load_data(file_path, date_filter=date_range,
+                       input_columns=input_columns, target_columns=target_columns)
+    if loaded is None:
         raise SystemExit(1)
 
-    dataset = Dataset(data=data, window_size=window_size)
+    inputs, targets = loaded
+    dataset = Dataset(input_data=inputs, target_data=targets, window_size=window_size)
     sample = dataset[0]
 
     model = build_gpt_style_model(GPTConfig(
         window_size=window_size, embed_dim=128, num_heads=4, ff_dim=256, num_blocks=4))
-    params = model.init(jax.random.PRNGKey(0), sample["x"][None, :])
-    prediction = model.apply(params, sample["x"][None, :])
+    params = model.init(jax.random.PRNGKey(0), sample["x"][None, ...])
+    prediction = model.apply(params, sample["x"][None, ...])
 
     print(f"Dataset length: {len(dataset)}")
     print(f"Input window shape: {sample['x'].shape}")

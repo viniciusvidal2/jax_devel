@@ -17,7 +17,7 @@ gpt_model:
   embed_dim: 128
   num_heads: 32
   ff_dim: 512
-  num_blocks: 10
+  num_blocks: 30
   dropout_rate: 0.4
 
 training:

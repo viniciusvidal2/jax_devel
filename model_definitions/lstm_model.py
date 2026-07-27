@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Flax LSTM regressor for windowed price sequences.
 
-The model accepts inputs shaped as [batch, window_size] and predicts a single
+The model accepts inputs shaped as [batch, window_size, num_features] and predicts a single
 next value for each window.
 """
 
@@ -30,18 +30,25 @@ class LSTMRegressor(nn.Module):
         Apply the LSTM regressor to input sequences.
 
         Parameters:
-            x (jnp.ndarray): Input sequence tensor, shaped [batch, window_size] or [window_size].
+            x (jnp.ndarray): Input sequence tensor, shaped [batch, window_size, num_features],
+                             [batch, window_size], or [window_size, num_features].
 
         Returns:
             jnp.ndarray: Predicted scalar values for each window, shaped [batch] or scalar.
         """
-        if x.ndim == 1:
-            x = x[None, :]
-        if x.ndim != 2:
-            raise ValueError(
-                "Expected inputs shaped as [batch, window_size] or [window_size].")
+        if x.ndim == 2:
+            if x.shape[0] == self.window_size if hasattr(self, "window_size") else False:
+                x = x[None, :, :]
+            else:
+                x = x[:, :, None]
+        elif x.ndim == 1:
+            x = x[None, :, None]
 
-        x = x[..., None]
+        if x.ndim != 3:
+            raise ValueError(
+                "Expected inputs shaped as [batch, window_size, num_features], "
+                "[batch, window_size], or [window_size, num_features]."
+            )
 
         for layer_index in range(self.num_layers):
             cell = nn.OptimizedLSTMCell(
@@ -94,6 +101,7 @@ def build_lstm_model(config: LSTMConfig) -> LSTMRegressor:
 
 def initialize_model(
     window_size: int = 10,
+    num_features: int = 2,
     hidden_size: int = 64,
     num_layers: int = 2,
 ) -> tuple[LSTMRegressor, dict, jnp.ndarray]:
@@ -102,6 +110,7 @@ def initialize_model(
 
     Parameters:
         window_size (int): Size of input sliding window.
+        num_features (int): Number of features per timestep.
         hidden_size (int): Size of LSTM hidden state.
         num_layers (int): Number of stacked LSTM layers.
 
@@ -110,7 +119,7 @@ def initialize_model(
     """
     model = build_lstm_model(LSTMConfig(
         window_size=window_size, hidden_size=hidden_size, num_layers=num_layers))
-    dummy_input = jnp.ones((1, window_size), dtype=jnp.float32)
+    dummy_input = jnp.ones((1, window_size, num_features), dtype=jnp.float32)
     params = model.init(jax.random.PRNGKey(0), dummy_input)
     output = model.apply(params, dummy_input)
     return model, params, output
@@ -122,21 +131,23 @@ def main() -> None:
     """
     file_path = "datasets/AAPL.csv"
     date_range = ("2017-01-01", "2022-12-31")
-    price_column = "Adj Close"
+    input_columns = ("Adj Close", "Volume")
+    target_columns = ("Adj Close",)
     window_size = 10
  
-    data = load_data(file_path, date_filter=date_range,
-                     price_column=price_column)
-    if data is None:
+    loaded = load_data(file_path, date_filter=date_range,
+                       input_columns=input_columns, target_columns=target_columns)
+    if loaded is None:
         raise SystemExit(1)
 
-    dataset = Dataset(data=data, window_size=window_size)
+    inputs, targets = loaded
+    dataset = Dataset(input_data=inputs, target_data=targets, window_size=window_size)
     sample = dataset[0]
 
     model = build_lstm_model(LSTMConfig(
         window_size=window_size, hidden_size=64, num_layers=2))
-    params = model.init(jax.random.PRNGKey(0), sample["x"][None, :])
-    prediction = model.apply(params, sample["x"][None, :])
+    params = model.init(jax.random.PRNGKey(0), sample["x"][None, ...])
+    prediction = model.apply(params, sample["x"][None, ...])
 
     print(f"Dataset length: {len(dataset)}")
     print(f"Input window shape: {sample['x'].shape}")
