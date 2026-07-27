@@ -1,0 +1,42 @@
+dataset_loading:
+  file_path: AAPL.csv
+  price_column: Adj Close
+  training_date_range:
+    - "1990-01-01"
+    - "2021-12-31"
+  evaluation_date_range:
+    - "2022-01-01"
+    - "2022-12-31"
+
+gpt_model:
+  window_size: 20
+  embed_dim: 260
+  num_heads: 20
+  ff_dim: 512
+  num_blocks: 6
+  dropout_rate: 0.4
+
+training:
+  batch_size: 64
+  max_steps: 15000
+  log_every: 150
+  seed: 42
+  learning_rate: 0.001
+  min_lr_scale: 0.1
+  decay_steps: 5000
+  adam_b1: 0.9
+  adam_b2: 0.999
+  adam_eps: 1.0e-8
+  grad_clip_norm: 1.0
+  stability_window: 100
+  min_steps_before_stability: 500
+  min_relative_improvement: 0.001
+  plateau_patience_windows: 5
+  checkpoint_path: gpt_model_checkpoint.orbax
+
+evaluation:
+  batch_size: 64
+  rolling_window: 20
+  save_dir: plots
+  show: true
+  checkpoint_path: gpt_model_checkpoint.orbax
