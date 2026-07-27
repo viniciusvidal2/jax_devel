@@ -161,7 +161,7 @@ def create_dataloader(
 def main() -> None:
     """Run the entire pipeline for loading the dataset and preparing it for use."""
     # Reading the dataset from a CSV file
-    file_path = 'AAPL.csv'  # Replace with your actual file path
+    file_path = 'datasets/AAPL.csv'  # Replace with your actual file path
     price_column = 'Adj Close'  # Replace with the actual column name if different
     # Replace with your desired date range
     date_range = ('1990-01-01', '2021-12-31')

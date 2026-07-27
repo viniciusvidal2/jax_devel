@@ -84,7 +84,7 @@ def initialize_model(window_size: int = 10, hidden_size: int = 64, num_layers: i
 
 
 def main() -> None:
-    file_path = "AAPL.csv"
+    file_path = "datasets/AAPL.csv"
     date_range = ("2017-01-01", "2022-12-31")
     price_column = "Adj Close"
     window_size = 10

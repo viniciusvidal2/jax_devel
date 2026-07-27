@@ -1,5 +1,5 @@
 dataset_loading:
-  file_path: AAPL.csv
+  file_path: "datasets/AAPL.csv"
   price_column: Adj Close
   training_date_range:
     - "1990-01-01"

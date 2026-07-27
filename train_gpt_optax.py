@@ -26,7 +26,7 @@ from prepare_dataset import Dataset, create_dataloader, load_data
 
 @dataclass(frozen=True)
 class TrainConfig:
-    file_path: str = "AAPL.csv"
+    file_path: str = "datasets/AAPL.csv"
     date_start: str = "1990-01-01"
     date_end: str = "2021-12-31"
     price_column: str = "Adj Close"

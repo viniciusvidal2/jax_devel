@@ -152,7 +152,7 @@ def initialize_model(window_size: int = 10, embed_dim: int = 128, num_heads: int
 
 
 def main() -> None:
-    file_path = "AAPL.csv"
+    file_path = "datasets/AAPL.csv"
     date_range = ("2017-01-01", "2022-12-31")
     price_column = "Adj Close"
     window_size = 100

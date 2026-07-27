@@ -27,7 +27,7 @@ from prepare_dataset import Dataset, create_dataloader, load_dataset_with_dates
 
 @dataclass(frozen=True)
 class EvalConfig:
-    file_path: str = "AAPL.csv"
+    file_path: str = "datasets/AAPL.csv"
     date_start: str = "2022-01-01"
     date_end: str = "2022-12-31"
     price_column: str = "Adj Close"
@@ -60,7 +60,7 @@ def load_eval_config() -> EvalConfig:
             "dataset_loading.evaluation_date_range must be a 2-item list.")
 
     return EvalConfig(
-        file_path=dataset_loading.get("file_path", "AAPL.csv"),
+        file_path=dataset_loading.get("file_path", "datasets/AAPL.csv"),
         date_start=evaluation_date_range[0],
         date_end=evaluation_date_range[1],
         price_column=dataset_loading.get("price_column", "Adj Close"),
